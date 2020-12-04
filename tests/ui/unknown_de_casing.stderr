@@ -1,0 +1,7 @@
+error: custom attribute panicked
+ --> $DIR/unknown_de_casing.rs:6:1
+  |
+6 | #[serde_alias(camelCase)]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: message: unknown casing: camelCase try one of ["PascalCase", "CamelCase", "LowerCase", "UpperCase", "SnakeCase", "ScreamingSnakeCase", "KebabCase", "ScreamingKebabCase"]
