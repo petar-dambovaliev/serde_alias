@@ -1,6 +1,6 @@
 [package]
 name = "serde_alias"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["Petar Dambovaliev <petar.atanasov.1987@gmail.com>"]
 edition = "2018"
 keywords = ["proc_macro", "procmacro", "serde", "alias", "serde-alias"]
