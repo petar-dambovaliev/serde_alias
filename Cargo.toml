@@ -5,7 +5,7 @@ authors = ["Petar Dambovaliev <petar.atanasov.1987@gmail.com>"]
 edition = "2018"
 keywords = ["proc_macro", "procmacro", "serde", "alias", "serde-alias"]
 description = "An attribute macro to apply serde aliases to all struct fields"
-repository = "https://github.com/petar-dambovaliev/serde-alias"
+repository = "https://github.com/petar-dambovaliev/serde_alias"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 
