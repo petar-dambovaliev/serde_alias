@@ -162,6 +162,49 @@ fn alias_struct(aliases: Vec<Casing>, mut input: ItemStruct) -> TokenStream {
     abort!(input, "Tuple structs not supported")
 }
 
-fn alias_enum(_aliases: Vec<Casing>, mut _input: ItemEnum) -> TokenStream {
-    unimplemented!();
+fn alias_enum(aliases: Vec<Casing>, mut input: ItemEnum) -> TokenStream {
+    for varient in &mut input.variants {
+        let mut punc_attr = Punctuated::new();
+
+        punc_attr.push_value(PathSegment {
+            ident: format_ident!("serde"),
+            arguments: Default::default(),
+        });
+
+        let mut casings = vec![];
+        for case in &aliases {
+            let convert_casing = match case {
+                Casing::Pascal => Case::Pascal,
+                Casing::Camel => Case::Camel,
+                Casing::Lower => Case::Lower,
+                Casing::Upper => Case::Upper,
+                Casing::Snake => Case::Snake,
+                Casing::ScreamingSnake => Case::ScreamingSnake,
+                Casing::Kebab => Case::Kebab,
+                Casing::ScreamingKebab => Case::Cobol,
+            };
+
+            let converted = varient.ident.to_string().to_case(convert_casing);
+
+            let f = format!(r#"alias = "{}""#, converted);
+            casings.push(f);
+        }
+
+        let res: String = casings.join(",");
+
+        varient.attrs.push(Attribute {
+            pound_token: token::Pound::default(),
+            style: AttrStyle::Outer,
+            bracket_token: Default::default(),
+            path: Path {
+                leading_colon: None,
+                segments: punc_attr.clone(),
+            },
+            tokens: TokenStream2::from_str(&format!("({})", res.as_str()))
+                .unwrap_or_else(|a| abort!(punc_attr, format!("Lex error: {}", a))),
+        })
+    }
+
+    let tokens = quote! {#input};
+    return tokens.into();
 }
