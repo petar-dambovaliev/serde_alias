@@ -11,8 +11,8 @@ use quote::{format_ident, quote};
 use std::str::FromStr;
 use syn::punctuated::Punctuated;
 use syn::{
-    parse_macro_input, token, AttrStyle, Attribute, AttributeArgs, Fields, ItemStruct, Meta,
-    NestedMeta, Path, PathSegment,
+    parse_macro_input, token, AttrStyle, Attribute, AttributeArgs, Fields, Item, ItemEnum,
+    ItemStruct, Meta, NestedMeta, Path, PathSegment,
 };
 
 enum Casing {
@@ -81,7 +81,6 @@ impl Casing {
 
 #[proc_macro_attribute]
 pub fn serde_alias(args: TokenStream, input: TokenStream) -> TokenStream {
-    let mut input = parse_macro_input!(input as ItemStruct);
     let args = parse_macro_input!(args as AttributeArgs);
 
     let mut aliases = vec![];
@@ -98,6 +97,16 @@ pub fn serde_alias(args: TokenStream, input: TokenStream) -> TokenStream {
         }
     }
 
+    let input = parse_macro_input!(input as Item);
+
+    match input {
+        Item::Enum(input) => alias_enum(aliases, input),
+        Item::Struct(input) => alias_struct(aliases, input),
+        _ => abort!(input, "Only supported on structs or enums"),
+    }
+}
+
+fn alias_struct(aliases: Vec<Casing>, mut input: ItemStruct) -> TokenStream {
     if let Fields::Named(ref mut named) = input.fields {
         for field in &mut named.named {
             let mut punc_attr = Punctuated::new();
@@ -151,4 +160,8 @@ pub fn serde_alias(args: TokenStream, input: TokenStream) -> TokenStream {
     }
 
     abort!(input, "Tuple structs not supported")
+}
+
+fn alias_enum(_aliases: Vec<Casing>, mut _input: ItemEnum) -> TokenStream {
+    unimplemented!();
 }
