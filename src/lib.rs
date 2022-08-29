@@ -79,6 +79,21 @@ impl Casing {
     }
 }
 
+impl From<&Casing> for Case {
+    fn from(casing: &Casing) -> Self {
+        match casing {
+            Casing::Pascal => Case::Pascal,
+            Casing::Camel => Case::Camel,
+            Casing::Lower => Case::Lower,
+            Casing::Upper => Case::Upper,
+            Casing::Snake => Case::Snake,
+            Casing::ScreamingSnake => Case::ScreamingSnake,
+            Casing::Kebab => Case::Kebab,
+            Casing::ScreamingKebab => Case::Cobol,
+        }
+    }
+}
+
 #[proc_macro_attribute]
 pub fn serde_alias(args: TokenStream, input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(args as AttributeArgs);
@@ -109,25 +124,9 @@ pub fn serde_alias(args: TokenStream, input: TokenStream) -> TokenStream {
 fn alias_struct(aliases: Vec<Casing>, mut input: ItemStruct) -> TokenStream {
     if let Fields::Named(ref mut named) = input.fields {
         for field in &mut named.named {
-            let mut punc_attr = Punctuated::new();
-
-            punc_attr.push_value(PathSegment {
-                ident: format_ident!("serde"),
-                arguments: Default::default(),
-            });
-
             let mut casings = vec![];
             for case in &aliases {
-                let convert_casing = match case {
-                    Casing::Pascal => Case::Pascal,
-                    Casing::Camel => Case::Camel,
-                    Casing::Lower => Case::Lower,
-                    Casing::Upper => Case::Upper,
-                    Casing::Snake => Case::Snake,
-                    Casing::ScreamingSnake => Case::ScreamingSnake,
-                    Casing::Kebab => Case::Kebab,
-                    Casing::ScreamingKebab => Case::Cobol,
-                };
+                let convert_casing = Case::from(case);
 
                 let converted = field
                     .ident
@@ -140,19 +139,7 @@ fn alias_struct(aliases: Vec<Casing>, mut input: ItemStruct) -> TokenStream {
                 casings.push(f);
             }
 
-            let res: String = casings.join(",");
-
-            field.attrs.push(Attribute {
-                pound_token: token::Pound::default(),
-                style: AttrStyle::Outer,
-                bracket_token: Default::default(),
-                path: Path {
-                    leading_colon: None,
-                    segments: punc_attr.clone(),
-                },
-                tokens: TokenStream2::from_str(&format!("({})", res.as_str()))
-                    .unwrap_or_else(|a| abort!(punc_attr, format!("Lex error: {}", a))),
-            })
+            field.attrs.push(create_field_attribute(casings));
         }
 
         let tokens = quote! {#input};
@@ -164,25 +151,9 @@ fn alias_struct(aliases: Vec<Casing>, mut input: ItemStruct) -> TokenStream {
 
 fn alias_enum(aliases: Vec<Casing>, mut input: ItemEnum) -> TokenStream {
     for varient in &mut input.variants {
-        let mut punc_attr = Punctuated::new();
-
-        punc_attr.push_value(PathSegment {
-            ident: format_ident!("serde"),
-            arguments: Default::default(),
-        });
-
         let mut casings = vec![];
         for case in &aliases {
-            let convert_casing = match case {
-                Casing::Pascal => Case::Pascal,
-                Casing::Camel => Case::Camel,
-                Casing::Lower => Case::Lower,
-                Casing::Upper => Case::Upper,
-                Casing::Snake => Case::Snake,
-                Casing::ScreamingSnake => Case::ScreamingSnake,
-                Casing::Kebab => Case::Kebab,
-                Casing::ScreamingKebab => Case::Cobol,
-            };
+            let convert_casing = Case::from(case);
 
             let converted = varient.ident.to_string().to_case(convert_casing);
 
@@ -190,21 +161,32 @@ fn alias_enum(aliases: Vec<Casing>, mut input: ItemEnum) -> TokenStream {
             casings.push(f);
         }
 
-        let res: String = casings.join(",");
-
-        varient.attrs.push(Attribute {
-            pound_token: token::Pound::default(),
-            style: AttrStyle::Outer,
-            bracket_token: Default::default(),
-            path: Path {
-                leading_colon: None,
-                segments: punc_attr.clone(),
-            },
-            tokens: TokenStream2::from_str(&format!("({})", res.as_str()))
-                .unwrap_or_else(|a| abort!(punc_attr, format!("Lex error: {}", a))),
-        })
+        varient.attrs.push(create_field_attribute(casings));
     }
 
     let tokens = quote! {#input};
     return tokens.into();
+}
+
+fn create_field_attribute(casings: Vec<String>) -> Attribute {
+    let mut punc_attr = Punctuated::new();
+
+    punc_attr.push_value(PathSegment {
+        ident: format_ident!("serde"),
+        arguments: Default::default(),
+    });
+
+    let res: String = casings.join(",");
+
+    Attribute {
+        pound_token: token::Pound::default(),
+        style: AttrStyle::Outer,
+        bracket_token: Default::default(),
+        path: Path {
+            leading_colon: None,
+            segments: punc_attr.clone(),
+        },
+        tokens: TokenStream2::from_str(&format!("({})", res.as_str()))
+            .unwrap_or_else(|a| abort!(punc_attr, format!("Lex error: {}", a))),
+    }
 }
