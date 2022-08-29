@@ -11,8 +11,8 @@ use quote::{format_ident, quote};
 use std::str::FromStr;
 use syn::punctuated::Punctuated;
 use syn::{
-    parse_macro_input, token, AttrStyle, Attribute, AttributeArgs, Fields, ItemStruct, Meta,
-    NestedMeta, Path, PathSegment,
+    parse_macro_input, token, AttrStyle, Attribute, AttributeArgs, Fields, Item, ItemEnum,
+    ItemStruct, Meta, NestedMeta, Path, PathSegment,
 };
 
 enum Casing {
@@ -66,7 +66,7 @@ impl ToString for Casing {
 
 impl Casing {
     const fn all() -> &'static [&'static str] {
-        return &[
+        &[
             "PascalCase",
             "CamelCase",
             "LowerCase",
@@ -75,50 +75,56 @@ impl Casing {
             "ScreamingSnakeCase",
             "KebabCase",
             "ScreamingKebabCase",
-        ];
+        ]
+    }
+}
+
+impl From<&Casing> for Case {
+    fn from(casing: &Casing) -> Self {
+        match casing {
+            Casing::Pascal => Case::Pascal,
+            Casing::Camel => Case::Camel,
+            Casing::Lower => Case::Lower,
+            Casing::Upper => Case::Upper,
+            Casing::Snake => Case::Snake,
+            Casing::ScreamingSnake => Case::ScreamingSnake,
+            Casing::Kebab => Case::Kebab,
+            Casing::ScreamingKebab => Case::Cobol,
+        }
     }
 }
 
 #[proc_macro_attribute]
 pub fn serde_alias(args: TokenStream, input: TokenStream) -> TokenStream {
-    let mut input = parse_macro_input!(input as ItemStruct);
     let args = parse_macro_input!(args as AttributeArgs);
 
     let mut aliases = vec![];
 
     for arg in args {
-        if let NestedMeta::Meta(meta) = arg {
-            if let Meta::Path(path) = meta {
-                let case_ident = path.get_ident().expect("expected casing");
-                let case =
-                    Casing::from_str(&case_ident.to_string()).unwrap_or_else(|e| panic!("{}", e));
+        if let NestedMeta::Meta(Meta::Path(path)) = arg {
+            let case_ident = path.get_ident().expect("expected casing");
+            let case =
+                Casing::from_str(&case_ident.to_string()).unwrap_or_else(|e| panic!("{}", e));
 
-                aliases.push(case);
-            }
+            aliases.push(case);
         }
     }
 
+    let input = parse_macro_input!(input as Item);
+
+    match input {
+        Item::Enum(input) => alias_enum(aliases, input),
+        Item::Struct(input) => alias_struct(aliases, input),
+        _ => abort!(input, "Only supported on structs or enums"),
+    }
+}
+
+fn alias_struct(aliases: Vec<Casing>, mut input: ItemStruct) -> TokenStream {
     if let Fields::Named(ref mut named) = input.fields {
         for field in &mut named.named {
-            let mut punc_attr = Punctuated::new();
-
-            punc_attr.push_value(PathSegment {
-                ident: format_ident!("serde"),
-                arguments: Default::default(),
-            });
-
             let mut casings = vec![];
             for case in &aliases {
-                let convert_casing = match case {
-                    Casing::Pascal => Case::Pascal,
-                    Casing::Camel => Case::Camel,
-                    Casing::Lower => Case::Lower,
-                    Casing::Upper => Case::Upper,
-                    Casing::Snake => Case::Snake,
-                    Casing::ScreamingSnake => Case::ScreamingSnake,
-                    Casing::Kebab => Case::Kebab,
-                    Casing::ScreamingKebab => Case::Cobol,
-                };
+                let convert_casing = Case::from(case);
 
                 let converted = field
                     .ident
@@ -131,19 +137,7 @@ pub fn serde_alias(args: TokenStream, input: TokenStream) -> TokenStream {
                 casings.push(f);
             }
 
-            let res: String = casings.join(",");
-
-            field.attrs.push(Attribute {
-                pound_token: token::Pound::default(),
-                style: AttrStyle::Outer,
-                bracket_token: Default::default(),
-                path: Path {
-                    leading_colon: None,
-                    segments: punc_attr.clone(),
-                },
-                tokens: TokenStream2::from_str(&format!("({})", res.as_str()))
-                    .unwrap_or_else(|a| abort!(punc_attr, format!("Lex error: {}", a))),
-            })
+            field.attrs.push(create_field_attribute(casings));
         }
 
         let tokens = quote! {#input};
@@ -151,4 +145,46 @@ pub fn serde_alias(args: TokenStream, input: TokenStream) -> TokenStream {
     }
 
     abort!(input, "Tuple structs not supported")
+}
+
+fn alias_enum(aliases: Vec<Casing>, mut input: ItemEnum) -> TokenStream {
+    for varient in &mut input.variants {
+        let mut casings = vec![];
+        for case in &aliases {
+            let convert_casing = Case::from(case);
+
+            let converted = varient.ident.to_string().to_case(convert_casing);
+
+            let f = format!(r#"alias = "{}""#, converted);
+            casings.push(f);
+        }
+
+        varient.attrs.push(create_field_attribute(casings));
+    }
+
+    let tokens = quote! {#input};
+    tokens.into()
+}
+
+fn create_field_attribute(casings: Vec<String>) -> Attribute {
+    let mut punc_attr = Punctuated::new();
+
+    punc_attr.push_value(PathSegment {
+        ident: format_ident!("serde"),
+        arguments: Default::default(),
+    });
+
+    let res: String = casings.join(",");
+
+    Attribute {
+        pound_token: token::Pound::default(),
+        style: AttrStyle::Outer,
+        bracket_token: Default::default(),
+        path: Path {
+            leading_colon: None,
+            segments: punc_attr.clone(),
+        },
+        tokens: TokenStream2::from_str(&format!("({})", res.as_str()))
+            .unwrap_or_else(|a| abort!(punc_attr, format!("Lex error: {}", a))),
+    }
 }
