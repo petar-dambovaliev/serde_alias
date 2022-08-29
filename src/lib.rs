@@ -66,7 +66,7 @@ impl ToString for Casing {
 
 impl Casing {
     const fn all() -> &'static [&'static str] {
-        return &[
+        &[
             "PascalCase",
             "CamelCase",
             "LowerCase",
@@ -75,7 +75,7 @@ impl Casing {
             "ScreamingSnakeCase",
             "KebabCase",
             "ScreamingKebabCase",
-        ];
+        ]
     }
 }
 
@@ -101,14 +101,12 @@ pub fn serde_alias(args: TokenStream, input: TokenStream) -> TokenStream {
     let mut aliases = vec![];
 
     for arg in args {
-        if let NestedMeta::Meta(meta) = arg {
-            if let Meta::Path(path) = meta {
-                let case_ident = path.get_ident().expect("expected casing");
-                let case =
-                    Casing::from_str(&case_ident.to_string()).unwrap_or_else(|e| panic!("{}", e));
+        if let NestedMeta::Meta(Meta::Path(path)) = arg {
+            let case_ident = path.get_ident().expect("expected casing");
+            let case =
+                Casing::from_str(&case_ident.to_string()).unwrap_or_else(|e| panic!("{}", e));
 
-                aliases.push(case);
-            }
+            aliases.push(case);
         }
     }
 
@@ -165,7 +163,7 @@ fn alias_enum(aliases: Vec<Casing>, mut input: ItemEnum) -> TokenStream {
     }
 
     let tokens = quote! {#input};
-    return tokens.into();
+    tokens.into()
 }
 
 fn create_field_attribute(casings: Vec<String>) -> Attribute {
